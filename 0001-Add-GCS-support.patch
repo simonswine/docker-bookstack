@@ -120,8 +120,8 @@ index 13198a50..aa1f171a 100644
 +            'projectId' => env('STORAGE_GCS_PROJECT_ID', 'your-project-id'),
 +            'bucket' => env('STORAGE_GCS_BUCKET', 'your-bucket'),
 +        ] +
-+        (env('STORAGE_GCS_URL', '') != '' ? [] : ['url' => env('STORAGE_GCS_URL', '')]) +
-+        (env('STORAGE_GCS_KEY_FILE_PATH', '') != '' ? [] : ['keyFilePath' => env('STORAGE_GCS_KEY_FILE_PATH', '')]),
++        (env('STORAGE_GCS_URL', '') == '' ? [] : ['url' => env('STORAGE_GCS_URL', '')]) +
++        (env('STORAGE_GCS_KEY_FILE_PATH', '') == '' ? [] : ['keyFilePath' => env('STORAGE_GCS_KEY_FILE_PATH', '')]),
 +
          'rackspace' => [
              'driver'    => 'rackspace',
