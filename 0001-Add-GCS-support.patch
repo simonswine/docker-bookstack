@@ -1,0 +1,131 @@
+From f6a45fe2acd6089bd6a66788cdac91c6a98bb307 Mon Sep 17 00:00:00 2001
+From: Christian Simon <simon@swine.de>
+Date: Mon, 24 Jun 2019 08:43:10 +0100
+Subject: [PATCH] Add GCS support
+
+---
+ app/Uploads/ImageService.php | 34 ++++++++--------------------------
+ config/app.php               |  3 +++
+ config/filesystems.php       |  8 ++++++++
+ 3 files changed, 19 insertions(+), 26 deletions(-)
+
+diff --git a/app/Uploads/ImageService.php b/app/Uploads/ImageService.php
+index 8eefbaf9..e52a5b02 100644
+--- a/app/Uploads/ImageService.php
++++ b/app/Uploads/ImageService.php
+@@ -17,7 +17,6 @@ class ImageService extends UploadService
+ 
+     protected $imageTool;
+     protected $cache;
+-    protected $storageUrl;
+     protected $image;
+     protected $http;
+ 
+@@ -158,7 +157,7 @@ class ImageService extends UploadService
+         $imageDetails = [
+             'name'       => $imageName,
+             'path'       => $fullPath,
+-            'url'        => $this->getPublicUrl($fullPath),
++            'url'        => $this->getPublicUrl($type, $fullPath),
+             'type'       => $type,
+             'uploaded_to' => $uploadedTo
+         ];
+@@ -200,7 +199,7 @@ class ImageService extends UploadService
+     public function getThumbnail(Image $image, $width = 220, $height = 220, $keepRatio = false)
+     {
+         if ($keepRatio && $this->isGif($image)) {
+-            return $this->getPublicUrl($image->path);
++            return $this->getPublicUrl($image->type, $image->path);
+         }
+ 
+         $thumbDirName = '/' . ($keepRatio ? 'scaled-' : 'thumbs-') . $width . '-' . $height . '/';
+@@ -208,12 +207,12 @@ class ImageService extends UploadService
+         $thumbFilePath = dirname($imagePath) . $thumbDirName . basename($imagePath);
+ 
+         if ($this->cache->has('images-' . $image->id . '-' . $thumbFilePath) && $this->cache->get('images-' . $thumbFilePath)) {
+-            return $this->getPublicUrl($thumbFilePath);
++            return $this->getPublicUrl($image->type, $thumbFilePath);
+         }
+ 
+         $storage = $this->getStorage($image->type);
+         if ($storage->exists($thumbFilePath)) {
+-            return $this->getPublicUrl($thumbFilePath);
++            return $this->getPublicUrl($image->type, $thumbFilePath);
+         }
+ 
+         $thumbData = $this->resizeImage($storage->get($imagePath), $width, $height, $keepRatio);
+@@ -222,7 +221,7 @@ class ImageService extends UploadService
+         $storage->setVisibility($thumbFilePath, 'public');
+         $this->cache->put('images-' . $image->id . '-' . $thumbFilePath, $thumbFilePath, 60 * 72);
+ 
+-        return $this->getPublicUrl($thumbFilePath);
++        return $this->getPublicUrl($image->type, $thumbFilePath);
+     }
+ 
+     /**
+@@ -450,26 +449,9 @@ class ImageService extends UploadService
+      * @param string $filePath
+      * @return string
+      */
+-    private function getPublicUrl($filePath)
++    private function getPublicUrl($type, $filePath)
+     {
+-        if ($this->storageUrl === null) {
+-            $storageUrl = config('filesystems.url');
+-
+-            // Get the standard public s3 url if s3 is set as storage type
+-            // Uses the nice, short URL if bucket name has no periods in otherwise the longer
+-            // region-based url will be used to prevent http issues.
+-            if ($storageUrl == false && config('filesystems.default') === 's3') {
+-                $storageDetails = config('filesystems.disks.s3');
+-                if (strpos($storageDetails['bucket'], '.') === false) {
+-                    $storageUrl = 'https://' . $storageDetails['bucket'] . '.s3.amazonaws.com';
+-                } else {
+-                    $storageUrl = 'https://s3-' . $storageDetails['region'] . '.amazonaws.com/' . $storageDetails['bucket'];
+-                }
+-            }
+-            $this->storageUrl = $storageUrl;
+-        }
+-
+-        $basePath = ($this->storageUrl == false) ? baseUrl('/') : $this->storageUrl;
+-        return rtrim($basePath, '/') . $filePath;
++        $storage = $this->getStorage($type);
++        return $storage->url($filePath);
+     }
+ }
+diff --git a/config/app.php b/config/app.php
+index aaeafb98..2588ed35 100755
+--- a/config/app.php
++++ b/config/app.php
+@@ -119,6 +119,9 @@ return [
+         BookStack\Providers\EventServiceProvider::class,
+         BookStack\Providers\RouteServiceProvider::class,
+         BookStack\Providers\CustomFacadeProvider::class,
++
++        // Register GCS storage
++        mix5003\GCSProvider\GoogleCloudStorageServiceProvider::class,
+     ],
+ 
+     /*
+diff --git a/config/filesystems.php b/config/filesystems.php
+index 13198a50..aa1f171a 100644
+--- a/config/filesystems.php
++++ b/config/filesystems.php
+@@ -53,6 +53,14 @@ return [
+             'use_path_style_endpoint' => env('STORAGE_S3_ENDPOINT', null) !== null,
+         ],
+ 
++        'gcs' => [
++            'driver' => 'gcs',
++            'projectId' => env('STORAGE_GCS_PROJECT_ID', 'your-project-id'),
++            'bucket' => env('STORAGE_GCS_BUCKET', 'your-bucket'),
++        ] +
++        (env('STORAGE_GCS_URL', '') != '' ? [] : ['url' => env('STORAGE_GCS_URL', '')]) +
++        (env('STORAGE_GCS_KEY_FILE_PATH', '') != '' ? [] : ['keyFilePath' => env('STORAGE_GCS_KEY_FILE_PATH', '')]),
++
+         'rackspace' => [
+             'driver'    => 'rackspace',
+             'username'  => 'your-username',
+-- 
+2.21.0
+
